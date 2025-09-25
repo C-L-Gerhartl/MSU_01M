@@ -8,7 +8,10 @@ const int pinKlemme15 = 2;
 const int pinComputerStatus = 3;
 // Relais Ansteuerung
 const int pinRelais = 4;
-
+// Klemme15 auf inaktiv
+bool klemme15Aktiv = false;
+// ComputerStatus auf inaktiv
+bool computerLaeuft = false;
 // MAC-Adresse des Arduino
 byte arduinoMac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 // IP-Adresse des Arduino
@@ -19,7 +22,7 @@ byte nucMac[] = { 0x88, 0xae, 0xdd, 0x68, 0xd7, 0x78 };
 // IP-Adresse des NUC
 IPAddress broadcastIP(192,168,178,10);
 
-unsigned int port = 5000;
+unsigned int port = 9;
 
 EthernetUDP Udp;
 
@@ -32,14 +35,17 @@ void setup() {
   pinMode(pinComputerStatus, INPUT);
   pinMode(pinRelais, OUTPUT);
   digitalWrite(pinRelais, LOW);
-  delay(1000); // Auf Netzwerk warten
-  //shutDown();
+  delay(10000); // Auf Netzwerk warten
+  Serial.print("Link Status: ");
+  Serial.println(Ethernet.linkStatus());
+  Serial.print("Arduino IP: ");
+  Serial.println(Ethernet.localIP());
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  bool klemme15Aktiv = digitalRead(pinKlemme15);
-  bool computerLaeuft = digitalRead(pinComputerStatus);
+  klemme15Aktiv = digitalRead(pinKlemme15);
+  computerLaeuft = digitalRead(pinComputerStatus);
   if(klemme15Aktiv){
     if(!computerLaeuft){
       //digitalWrite(pinRelais, HIGH);  //Start PC per WOL oder WOP
@@ -84,6 +90,7 @@ void sendWOL(byte *mac){
   Udp.beginPacket(broadcastIP, port);
   Udp.write(magicPacket, sizeof(magicPacket));
   Udp.endPacket();
+  delay(5000);
 }
 
 void shutDown(){
@@ -91,4 +98,5 @@ void shutDown(){
   Udp.beginPacket(broadcastIP, port);
   Udp.write(message);
   Udp.endPacket();
+  delay(5000);
 }
