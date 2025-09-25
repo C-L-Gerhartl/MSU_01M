@@ -3,10 +3,11 @@ Description=UDP Shutdown Listener
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/username/vehicle_shutdown.py
+ExecStart=/usr/bin/env python3 /opt/vehicle_shutdown.py
 Restart=always
 User=user
 WorkingDirectory=/home/username
 
 [Install]
 WantedBy=multi-user.target
+
