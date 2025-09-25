@@ -4,6 +4,7 @@ Arduino Sketch to control NUC start/shutdown behavior.
 
 This repository contains an Arduino sketch to control the start and shutdown behavior of a NUC-PC running a Linux-based operating system.  
 Additionally, you need to install the Python script `vehicle_shutdown.py` on the NUC.
+Logic is shown in StateMaschine.xlsx... 
 
 ---
 
