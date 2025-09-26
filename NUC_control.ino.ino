@@ -36,14 +36,6 @@ unsigned int port = 9;
 unsigned int shutDownCouter = 0;
 
 //Zeitsteuerung
-// unsigned long lastWOLTime = 0;
-// unsigned long wolInterval = 10000; // alle 10 Sekunden
-// unsigned long lastShutdownTime = 0;
-// unsigned long shutdownInterval = 5000;
-// unsigned long lastRelaisTime = 0;
-// unsigned long relaisDuration = 500;
-// unsigned long hardResetStart = 0;
-// unsigned long hardResetDuration = 15000;
 unsigned long lastTempRead = 0;
 const unsigned long tempInterval = 500;
 unsigned long lastStatusCheck = 0;
