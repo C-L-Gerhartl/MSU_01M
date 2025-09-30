@@ -90,20 +90,21 @@ void loop() {
 
     tempSensors.requestTemperatures(); // Alle Sensoren abfragen
     float temps[5];
-    char tempsStr[5];
+    char tempsStr[5][10];
     float tempKumuliert = 0;
-    char t1Str[10], t2Str[10], t3Str[10], avrTempStr[10];
-    for (int i = 0; i < tempSensors.getDeviceCount(); i++) {
+    int sensorCount = min(tempSensors.getDeviceCount(), 3);
+    for (int i = 0; i < sensorCount; i++) {
       temps[i] = tempSensors.getTempCByIndex(i);
       Serial.print("Sensor ");
       Serial.print(i);
       Serial.print(": ");
       Serial.print(temps[i]);
       Serial.println(" °C");
-      dtostrf(tempSensors.getTempCByIndex(i), 4, 1, tempsStr[i]);
+      dtostrf(temps[i], 4, 1, tempsStr[i]);
       tempKumuliert = tempKumuliert + temps[i];
     }
-    float avrTemp = tempKumuliert / tempSensors.getDeviceCount();
+    char avrTempStr[10];
+    float avrTemp = tempKumuliert / sensorCount;
     dtostrf(avrTemp, 4, 1, avrTempStr);
     Serial.println(tempKumuliert);
 
@@ -249,7 +250,6 @@ void pwmSetDutyCycle(uint8_t dc) {
 void pwmStart() {
   TCCR1A |= _BV(COM1A1);
   TCCR1B |= _BV(CS10);
-  TCCR1B |= CLOCKSET;
 }
 
 // stop PWM signal
