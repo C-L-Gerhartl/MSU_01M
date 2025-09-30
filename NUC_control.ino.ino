@@ -10,13 +10,18 @@
 // Klemme 15 Fahrzeug und wake-up
 const int pinKlemme15 = 2;
 // USB verfügbar?
-const int pinComputerStatus = 3;
+const int pinComputerStatus = 5;
 // Relais Ansteuerung
 const int pinRelais = 4;
 // Temp-Sensoren OneWire Bus
 OneWire DS18_PIN(7);
 // PWM Luefter
-const int luefterPWM = 9;
+const int pinluefterPWM = 9;
+// Tacho signal Interrupt
+const int pinTacho = 3;
+// Tacho Variablen
+volatile uint16_t tachoCounter = 0;
+float rpm = 0;
 
 bool klemme15Aktiv = false;
 bool computerLaeuft = false;
@@ -62,6 +67,8 @@ void setup() {
   tempSensors.begin();
   pinMode(pinKlemme15, INPUT);
   attachInterrupt(digitalPinToInterrupt(pinKlemme15), wakeUp, RISING);
+  pinMode(pinTacho, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(pinTacho), countTachPulse, FALLING);
   delay(2000);
   pinMode(pinComputerStatus, INPUT);
   pinMode(pinRelais, OUTPUT);
@@ -112,10 +119,23 @@ void loop() {
     pwmSetDutyCycle(pwmValue);
     Serial.println(pwmValue);
 
+    // Lüfterdrehzahl ablesen
+    noInterrupts();
+    uint16_t pulses = tachoCounter;
+    tachoCounter = 0;
+    interrupts();
+
+    rpm = (pulses / 2.0) * 60.0;
+    Serial.print("Lüfterdrehzahl: ");
+    Serial.print(rpm);
+    Serial.println(" RPM");
+    char fanSpeedStr[10];
+    dtostrf(rpm, 4, 1, fanSpeedStr);
+
     char jsonMessage[200];
     snprintf(jsonMessage, sizeof(jsonMessage),
-      "{\"tempC1\":%s,\"tempC2\":%s,\"tempC3\":%s,\"avgTemp\":%s,\"pwm\":%d}",
-      tempsStr[0], tempsStr[1], tempsStr[2], avrTempStr, pwmValue);
+      "{\"tempC1\":%s,\"tempC2\":%s,\"tempC3\":%s,\"avgTemp\":%s,\"pwm\":%d,\"fanSpeed\":%s}",
+      tempsStr[0], tempsStr[1], tempsStr[2], avrTempStr, pwmValue, fanSpeedStr);
     logMessage(jsonMessage);
     Serial.println(jsonMessage);
   }
@@ -263,4 +283,8 @@ void pwmStop() {
 void enableExternalInterrupts() {
   EICRA = _BV(ISC11) | _BV(ISC10) | _BV(ISC01) | _BV(ISC00);   // Int0 & Int1 -> rising edge
   EIMSK = _BV(INT1) | _BV(INT0);
+}
+
+void countTachPulse(){
+  tachoCounter++;
 }
