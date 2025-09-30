@@ -56,6 +56,83 @@ EthernetUDP Udp;
 
 DallasTemperature tempSensors(&DS18_PIN);
 
+void countTachPulse(){
+  tachoCounter++;
+}
+
+// Log-Message an NUC per LAN
+void logMessage(char* message){
+  Udp.beginPacket(broadcastIP, port);
+  Udp.write(message);
+  Udp.endPacket();
+}
+
+// Init PWM signal (25kHz)
+void pwmInit() {
+  DDRB |= _BV(PB1);   // OCR1A Pin (PB1 / D9)
+  TCCR1A = _BV(COM1A1) | _BV(WGM11);
+  TCCR1B = _BV(WGM13);
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { ICR1 = ICOUNTER; }
+}
+
+// Set dutycycle of the PWM signal
+// @param dc   0-100%
+void pwmSetDutyCycle(uint8_t dc) {
+  uint16_t ocr1a = (dc > 100) ? 100 : dc;
+  ocr1a = static_cast<uint16_t>((((ICR1 * 10UL * ocr1a) / 100) + 5) / 10);   // Result must be 16Bit
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { OCR1A = ocr1a; }
+}
+
+// start PWM signal
+void pwmStart() {
+  TCCR1A |= _BV(COM1A1);
+  TCCR1B |= _BV(CS10);
+}
+
+// stop PWM signal
+void pwmStop() {
+  TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+  TCCR1A &= ~(_BV(COM1A1));
+  PORTB &= ~(_BV(PB1));   // OCR1A Pin (PB1 / D9) to LOW
+}
+
+// Enable external interrupts for INT0 and INT1 Pins (D2, D3)
+void enableExternalInterrupts() {
+  EICRA = _BV(ISC11) | _BV(ISC10) | _BV(ISC01) | _BV(ISC00);   // Int0 & Int1 -> rising edge
+  EIMSK = _BV(INT1) | _BV(INT0);
+}
+
+// ShutDown
+void shutDown(){
+  Serial.println("Fährt runter...");
+  const char* message = "shutdown";
+  Udp.beginPacket(broadcastIP, port);
+  Udp.write(message);
+  Udp.endPacket();
+  Serial.println(message);
+  delay(5000);
+}
+
+// NUC-Start physisch
+void startPCphysisch() {
+  digitalWrite(pinRelais, HIGH);  //Start PC per WOL oder WOP
+  delay(500);
+  digitalWrite(pinRelais, LOW);
+}
+
+// Wake up Arduino Interupt
+void wakeUp(){
+  sleep_disable();
+}
+
+// NUC Shut off physisch
+void hardReset(){
+  shutDownCouter = 0;
+  digitalWrite(pinRelais, HIGH);  // PC-hardreset physisch
+  delay(15000);
+  digitalWrite(pinRelais, LOW);
+}
+
 void setup() {
   // put your setup code here, to run once:
   pwmInit();
@@ -73,7 +150,7 @@ void setup() {
   pinMode(pinComputerStatus, INPUT);
   pinMode(pinRelais, OUTPUT);
   digitalWrite(pinRelais, LOW);
-  pinMode(luefterPWM, OUTPUT);  
+  pinMode(pinluefterPWM, OUTPUT);  
   delay(10000); // Auf Netzwerk warten
 
 
@@ -83,6 +160,38 @@ void setup() {
   Serial.println(Ethernet.localIP());
   logMessage("Arduino gestartet mit IP: ");
   logMessage(Ethernet.localIP());
+}
+
+// Wake on LAN 
+void sendWOL(byte *mac){
+  Serial.println("PC startet per WOL...");
+  logMessage("PC startet per WOL...");
+  byte magicPacket[102];
+
+  // Magic Packet beginnt mit 6x 0xFF
+  for(int i = 0; i < 6; i++){
+    magicPacket[i] = 0xFF;
+    Serial.print(magicPacket[i]);
+    Serial.print(",");
+  }
+  Serial.println("");
+  // Danach 16x die MAC-Adress
+  for(int i = 1; i <= 16; i++){
+    for(int j = 0; j  < 6; j++){
+      magicPacket[i*6+j] = mac[j];
+      Serial.print(magicPacket[i*6+j]);
+      Serial.print(",");
+    }
+  } 
+  Serial.println("");
+  Udp.beginPacket(broadcastIP, port);
+  Udp.write(magicPacket, sizeof(magicPacket));
+  Udp.endPacket();
+  delay(5000);
+  if(digitalRead(pinKlemme15) && !digitalRead(pinComputerStatus)){
+    Serial.println("PC startet per Relais...");
+    startPCphysisch();
+  }
 }
 
 void loop() {
@@ -178,113 +287,4 @@ void loop() {
       }
     }
   }
-}
-
-// Wake on LAN 
-void sendWOL(byte *mac){
-  Serial.println("PC startet per WOL...");
-  logMessage("PC startet per WOL...");
-  byte magicPacket[102];
-
-  // Magic Packet beginnt mit 6x 0xFF
-  for(int i = 0; i < 6; i++){
-    magicPacket[i] = 0xFF;
-    Serial.print(magicPacket[i]);
-    Serial.print(",");
-  }
-  Serial.println("");
-  // Danach 16x die MAC-Adress
-  for(int i = 1; i <= 16; i++){
-    for(int j = 0; j  < 6; j++){
-      magicPacket[i*6+j] = mac[j];
-      Serial.print(magicPacket[i*6+j]);
-      Serial.print(",");
-    }
-  } 
-  Serial.println("");
-  Udp.beginPacket(broadcastIP, port);
-  Udp.write(magicPacket, sizeof(magicPacket));
-  Udp.endPacket();
-  delay(5000);
-  if(digitalRead(pinKlemme15) && !digitalRead(pinComputerStatus)){
-    Serial.println("PC startet per Relais...");
-    startPCphysisch();
-  }
-}
-
-// ShutDown
-void shutDown(){
-  Serial.println("Fährt runter...");
-  const char* message = "shutdown";
-  Udp.beginPacket(broadcastIP, port);
-  Udp.write(message);
-  Udp.endPacket();
-  Serial.println(message);
-  delay(5000);
-}
-
-// NUC-Start physisch
-void startPCphysisch() {
-  digitalWrite(pinRelais, HIGH);  //Start PC per WOL oder WOP
-  delay(500);
-  digitalWrite(pinRelais, LOW);
-}
-
-// Wake up Arduino Interupt
-void wakeUp(){
-  sleep_disable();
-}
-
-// NUC Shut off physisch
-void hardReset(){
-  shutDownCouter = 0;
-  digitalWrite(pinRelais, HIGH);  // PC-hardreset physisch
-  delay(15000);
-  digitalWrite(pinRelais, LOW);
-}
-
-// Log-Message an NUC per LAN
-void logMessage(char* message){
-  Udp.beginPacket(broadcastIP, port);
-  Udp.write(message);
-  Udp.endPacket();
-}
-
-// Init PWM signal (25kHz)
-void pwmInit() {
-  DDRB |= _BV(PB1);   // OCR1A Pin (PB1 / D9)
-  TCCR1A = _BV(COM1A1) | _BV(WGM11);
-  TCCR1B = _BV(WGM13);
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { ICR1 = ICOUNTER; }
-}
-
-// Set dutycycle of the PWM signal
-// @param dc   0-100%
-void pwmSetDutyCycle(uint8_t dc) {
-  uint16_t ocr1a = (dc > 100) ? 100 : dc;
-  ocr1a = static_cast<uint16_t>((((ICR1 * 10UL * ocr1a) / 100) + 5) / 10);   // Result must be 16Bit
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { OCR1A = ocr1a; }
-}
-
-// start PWM signal
-void pwmStart() {
-  TCCR1A |= _BV(COM1A1);
-  TCCR1B |= _BV(CS10);
-}
-
-// stop PWM signal
-void pwmStop() {
-  TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
-  TCCR1A &= ~(_BV(COM1A1));
-  PORTB &= ~(_BV(PB1));   // OCR1A Pin (PB1 / D9) to LOW
-}
-
-// Enable external interrupts for INT0 and INT1 Pins (D2, D3)
-void enableExternalInterrupts() {
-  EICRA = _BV(ISC11) | _BV(ISC10) | _BV(ISC01) | _BV(ISC00);   // Int0 & Int1 -> rising edge
-  EIMSK = _BV(INT1) | _BV(INT0);
-}
-
-void countTachPulse(){
-  tachoCounter++;
 }
