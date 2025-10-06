@@ -23,6 +23,10 @@ const int pinTacho = 3;
 volatile uint16_t tachoCounter = 0;
 float rpm = 0;
 
+// Temp-Grenzen Lüfter
+float tempMin = 25.0;
+float tempMax = 35.0;
+
 bool klemme15Aktiv = false;
 bool computerLaeuft = false;
 
@@ -128,38 +132,33 @@ void wakeUp(){
 // NUC Shut off physisch
 void hardReset(){
   shutDownCouter = 0;
+  Serial.println("Hard-Reset wird ausgeführt!");
   digitalWrite(pinRelais, HIGH);  // PC-hardreset physisch
   delay(15000);
   digitalWrite(pinRelais, LOW);
 }
 
-void setup() {
-  // put your setup code here, to run once:
-  pwmInit();
-  pwmSetDutyCycle(100);
-  pwmStart();
-  Ethernet.begin(arduinoMac, arduinoIP);
-  Serial.begin(115200);
-  Udp.begin(port);
-  tempSensors.begin();
-  pinMode(pinKlemme15, INPUT);
-  attachInterrupt(digitalPinToInterrupt(pinKlemme15), wakeUp, RISING);
-  pinMode(pinTacho, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(pinTacho), countTachPulse, FALLING);
-  delay(2000);
-  pinMode(pinComputerStatus, INPUT);
-  pinMode(pinRelais, OUTPUT);
-  digitalWrite(pinRelais, LOW);
-  pinMode(pinluefterPWM, OUTPUT);  
-  delay(10000); // Auf Netzwerk warten
+void checkUdpCommands(){
+  int packetSize = Udp.parsePacket();
+  if(packetSize){
+    char incomingPacket[255];
+    int len = Udp.read(incomingPacket, 255);
+    if(len > 0){
+      incomingPacket[len] = '\0';
+    }
+    Serial.print("Empfangenes Paket: ");
+    Serial.println(incomingPacket);
 
-
-  Serial.print("Link Status: ");
-  Serial.println(Ethernet.linkStatus());
-  Serial.print("Arduino IP: ");
-  Serial.println(Ethernet.localIP());
-  logMessage("Arduino gestartet mit IP: ");
-  logMessage(Ethernet.localIP());
+    float newMin, newMax;
+    if(sscanf(incomingPacket, "{\"tempMin\":%f,\"tempMax\":%f}", &newMin, &newMax) == 2){
+      tempMin = newMin;
+      tempMax = newMax;
+      Serial.print("Neue Grenzwerte: ");
+      Serial.print(tempMin);
+      Serial.print(" - ");
+      Serial.println(tempMax);
+    }
+  }
 }
 
 // Wake on LAN 
@@ -194,8 +193,37 @@ void sendWOL(byte *mac){
   }
 }
 
+void setup() {
+  // put your setup code here, to run once:
+  pwmInit();
+  pwmSetDutyCycle(100);
+  pwmStart();
+  Ethernet.begin(arduinoMac, arduinoIP);
+  Serial.begin(115200);
+  Udp.begin(port);
+  tempSensors.begin();
+  pinMode(pinKlemme15, INPUT);
+  attachInterrupt(digitalPinToInterrupt(pinKlemme15), wakeUp, RISING);
+  pinMode(pinTacho, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(pinTacho), countTachPulse, FALLING);
+  delay(2000);
+  pinMode(pinComputerStatus, INPUT);
+  pinMode(pinRelais, OUTPUT);
+  digitalWrite(pinRelais, LOW);
+  pinMode(pinluefterPWM, OUTPUT);  
+  delay(10000); // Auf Netzwerk warten
+
+  Serial.print("Link Status: ");
+  Serial.println(Ethernet.linkStatus());
+  Serial.print("Arduino IP: ");
+  Serial.println(Ethernet.localIP());
+  logMessage("Arduino gestartet mit IP: ");
+  logMessage(Ethernet.localIP());
+}
+
 void loop() {
   // put your main code here, to run repeatedly:
+  checkUdpCommands();
   unsigned long currentTime = millis();
   klemme15Aktiv = digitalRead(pinKlemme15);
   computerLaeuft = digitalRead(pinComputerStatus);
@@ -224,7 +252,7 @@ void loop() {
     dtostrf(avrTemp, 4, 1, avrTempStr);
     Serial.println(tempKumuliert);
 
-    int pwmValue = map(constrain(avrTemp, 25, 35), 25, 35, 0, 100);
+    int pwmValue = map(constrain(avrTemp, tempMin, tempMax), tempMin, tempMax, 0, 100);
     pwmSetDutyCycle(pwmValue);
     Serial.println(pwmValue);
 
