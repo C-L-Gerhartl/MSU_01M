@@ -2,9 +2,11 @@
 
 Arduino Sketch to control NUC start/shutdown behavior.
 
-This repository contains an Arduino sketch to control the start and shutdown behavior of a NUC-PC running a Linux-based operating system.  
-Additionally, you need to install the Python script `vehicle_shutdown.py` on the NUC.
-Logic is shown in StateMaschine.xlsx... 
+This repository contains an Arduino sketch for controlling the startup and shutdown behavior of a NUC PC running a Linux operating system. 
+The NUC must be connected to the Arduino via LAN and also requires a modified USB cable to read the PC's status.
+You must also install the Python script "vehicle_shutdown.py" on the NUC. 
+This script sends a shutdown command to the NUC, receives log messages, and can set the temperature thresholds for the fan.
+The logic is shown in StateMachine.xlsx.
 
 ---
 
@@ -14,7 +16,7 @@ Logic is shown in StateMaschine.xlsx...
 
 1. Clone this repository.
 2. Download and install the [Arduino IDE](https://www.arduino.cc/en/softwareduino IDE.
-4. Connect your Arduino and flash the sketch.
+4. Connect your Arduino(Uno or Nano) and flash the sketch.
 
 ### Linux Mint Setup (NUC)
 
